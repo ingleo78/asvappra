@@ -1,0 +1,6 @@
+#include "gmock.h"
+#include "gmock-cardinalities.cc"
+#include "gmock-internal-utils.cc"
+#include "gmock-matchers.cc"
+#include "gmock-spec-builders.cc"
+#include "gmock.cc"

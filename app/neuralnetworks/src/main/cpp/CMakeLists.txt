@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 3.18.1)
+project("neuralnetworks")
+add_library(neuralnetworks SHARED neuralnetworks.cpp ShowMessageError.cpp globalData.cpp functionsData.cpp)
+find_library(log-lib log )
+find_library(neuralnetworks-lib neuralneworks)
+find_library(android-lib android)
+target_link_libraries(neuralnetworks ${log-lib})
+target_link_libraries(neuralnetworks ${android-lib})

@@ -1,0 +1,8 @@
+#include "gtest.h"
+#include "gtest.cc"
+#include "gtest-death-test.cc"
+#include "gtest-filepath.cc"
+#include "gtest-port.cc"
+#include "gtest-printers.cc"
+#include "gtest-test-part.cc"
+#include "gtest-typed-test.cc"

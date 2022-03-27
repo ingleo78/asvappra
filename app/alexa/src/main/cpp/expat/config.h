@@ -1,0 +1,40 @@
+#define BYTEORDER @BYTEORDER@
+#define HAVE_ARC4RANDOM
+#define HAVE_ARC4RANDOM_BUF
+#define HAVE_DLFCN_H
+#define HAVE_FCNTL_H
+#define HAVE_GETPAGESIZE
+#define HAVE_GETRANDOM
+#define HAVE_INTTYPES_H
+#define HAVE_LIBBSD
+#define HAVE_MEMORY_H
+#define HAVE_MMAP
+#define HAVE_STDINT_H
+#define HAVE_STDLIB_H
+#define HAVE_STRINGS_H
+#define HAVE_STRING_H
+#define HAVE_SYSCALL_GETRANDOM
+#define HAVE_SYS_STAT_H
+#define HAVE_SYS_TYPES_H
+#define HAVE_UNISTD_H
+#define PACKAGE "@PACKAGE_NAME@"
+#define PACKAGE_BUGREPORT "@PACKAGE_BUGREPORT@"
+#define PACKAGE_NAME "@PACKAGE_NAME@"
+#define PACKAGE_STRING "@PACKAGE_STRING@"
+#define PACKAGE_TARNAME "@PACKAGE_TARNAME@"
+#define PACKAGE_URL ""
+#define PACKAGE_VERSION "@PACKAGE_VERSION@"
+#define STDC_HEADERS
+#define WORDS_BIGENDIAN
+#define XML_ATTR_INFO
+#define XML_CONTEXT_BYTES @XML_CONTEXT_BYTES@
+#if !defined(_WIN32)
+#define XML_DEV_URANDOM
+#endif
+#define XML_DTD
+#define XML_NS
+#ifdef _MSC_VER
+#define __func__ __FUNCTION__
+#endif
+#define off_t @OFF_T@
+#define size_t @SIZE_T@

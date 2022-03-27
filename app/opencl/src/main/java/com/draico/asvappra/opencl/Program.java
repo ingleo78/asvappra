@@ -1,0 +1,78 @@
+package com.draico.asvappra.opencl;
+
+import com.draico.asvappra.opencl.listeners.CallbackBuildProgram;
+import com.draico.asvappra.opencl.listeners.CallbackCompileProgram;
+import com.draico.asvappra.opencl.listeners.CallbackLinkProgram;
+import com.draico.asvappra.opencl.listeners.CallbackProgram;
+
+import java.io.File;
+
+public class Program {
+    private Context context;
+    private Device[] devices;
+    private File[] filesProgramSource;
+    private String programSource;
+    private String[] programKernelName;
+    private String typeProgram;
+    private int[] sizeFileProgramBinaries;
+    byte[] dataProgram;
+    private int numberKernels;
+    private int currentProgram;
+    private boolean isBuildProgram;
+    private boolean isLinkedProgram;
+    private boolean isCompileProgram;
+    public static String OptionD = "-D ";
+    public static String OptionDName = "-D name=";
+    public static String OptionDir = "-I ";
+    public static String SinglePrecisionConstant = "-cl-single-precision-constant";
+    public static String DenormsAreZero = "-cl-denorms-are-zero";
+    public static String FP32CorrectlyRoundedDivideSqrt = "-cl-fp32-correctly-rounded-divide-sqrt";
+    public static String OptDisable = "-cl-opt-disable";
+    public static String MadEnable = "-cl-mad-enable";
+    public static String NoSignedZeros = "-cl-no-signed-zeros";
+    public static String UnsafeMathOptimizations = "-cl-unsafe-math-optimizations";
+    public static String FiniteMathOnly = "-cl-finite-math-only";
+    public static String FastRelaxedMath = "-cl-fast-relaxed-math";
+    public static String UniformWorkGroupSize = "-cl-uniform-work-group-size";
+    public static String NoSubgrupIFP = "cl-no-subgroup-ifp";
+    public static String WarningMessages = "-w";
+    public static String WarningError = "-Werror";
+    public static String STD = "-cl-std=";
+    public static String KernelArgInfo = "-cl-kernel-arg-info";
+    public static String G = "-g";
+    public static String CreateLibrary = "-create-library";
+    public static String EnableLinkOptions = "-enable-link-options";
+    public static String CL1_1 = "CL1.1";
+    public static String CL1_2 = "CL1.2";
+    public static String CL2_0 = "CL2.0";
+    public static native Program createProgramWithSource(Context context, File[] filesProgramSource);
+    public static native Program createProgramWithSourceScriptKernel(Context context, byte[] data);
+    private static native Program createProgramWithSourceAssets(Context context);
+    public static native Program createProgramWithIL(Context context, byte[] dataProgram);
+    public static native Program createProgramWithBinary(Context context, Device[] devices, File[] fileBinaries, int[] stateFilesBinaries);
+    public static native Program createProgramWithBuiltInKernels(Context context, Device[] devices, String[] kernelNames);
+    public native void releaseProgram();
+    public native void setProgramReleaseCallback(CallbackProgram callbackProgram);
+    public native void setProgramSpecializationConstant(int specializationID, Object dataSpecialization);
+    public native void buildProgram(Device[] devices, String buildOptions, CallbackBuildProgram callbackBuildProgram);
+    public native void compileProgram(Device[] devices, String compileOptions, Program[] programs, File[] headersFiles,
+                                      CallbackCompileProgram callbackCompileProgram);
+    public native Program linkProgram(Context context, Device[] devices, String linkOptions, Program[] programs, CallbackLinkProgram callbackLinkProgram);
+    public native void unloadPlatformCompiler(Platform platform);
+    public native Context getContext();
+    public native Device[] getDevices();
+    public native String getFilesProgramSource();
+    public native String getProgramIL();
+    public native int[] getSizeFileProgramBinaries();
+    public native byte[][] getFilesProgramBinaries();
+    public native int getNumberKernels();
+    public native String[] getProgramKernelName();
+    public native boolean isScopeGlobalConstructorsPresent();
+    public native boolean isScopeGlobalDestructorsPresent();
+    public native String getBuildStatus();
+    public native String getBuildOptions();
+    public native String getBuildLog();
+    public native String getBinaryType();
+    public native int[] getSize();
+    public native String toString();
+}

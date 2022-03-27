@@ -1,0 +1,417 @@
+#undef G_DISABLE_ASSERT
+#undef G_LOG_DOMAIN
+
+#include <string.h>
+#include "../glib.h"
+
+static void test_iconv_state(void) {
+  gchar *in = "\xf4\xe5\xf8\xe5\xed";
+  gchar *expected = "\xd7\xa4\xd7\x95\xd7\xa8\xd7\x95\xd7\x9d";
+  gchar *out;
+  gsize bytes_read = 0;
+  gsize bytes_written = 0;
+  GError *error = NULL;
+  out = g_convert (in, -1, "UTF-8", "CP1255", &bytes_read, &bytes_written, &error);
+  if (error && error->code == G_CONVERT_ERROR_NO_CONVERSION) return;
+  g_assert_no_error (error);
+  g_assert (bytes_read == 5);
+  g_assert (bytes_written == 10);
+  g_assert (strcmp (out, expected) == 0);
+  g_free (out);
+}
+static void test_one_half(void) {
+  gchar *in = "\xc2\xbd";
+  gchar *out;
+  gsize bytes_read = 0;
+  gsize bytes_written = 0;
+  GError *error = NULL;
+  out = g_convert(in, -1,"ISO-8859-1", "UTF-8", &bytes_read, &bytes_written, &error);
+  g_assert_no_error(error);
+  g_assert(bytes_read == 2);
+  g_assert(bytes_written == 1);
+  g_assert(strcmp (out, "\xbd") == 0);
+  g_free(out);
+  out = g_convert(in, -1,"ISO-8859-15", "UTF-8", &bytes_read, &bytes_written, &error);
+  g_assert_error(error, G_CONVERT_ERROR, G_CONVERT_ERROR_ILLEGAL_SEQUENCE);
+  g_assert(bytes_read == 0);
+  g_assert(bytes_written == 0);
+  g_assert(out == NULL);
+  g_clear_error(&error);
+  g_free(out);
+  out = g_convert_with_fallback(in, -1,"ISO8859-15", "UTF-8","a", &bytes_read, &bytes_written, &error);
+  g_assert_no_error(error);
+  g_assert(bytes_read == 2);
+  g_assert(bytes_written == 1);
+  g_assert(strcmp (out, "a") == 0);
+  g_free(out);
+}
+static void test_byte_order(void) {
+  gchar in_be[4] = { 0xfe, 0xff, 0x03, 0x93};
+  gchar in_le[4] = { 0xff, 0xfe, 0x93, 0x03};
+  gchar *expected = "\xce\x93";
+  gchar *out;
+  gsize bytes_read = 0;
+  gsize bytes_written = 0;
+  GError *error = NULL;
+  out = g_convert(in_be, sizeof (in_be),"UTF-8", "UTF-16", &bytes_read, &bytes_written, &error);
+  g_assert_no_error(error);
+  g_assert(bytes_read == 4);
+  g_assert(bytes_written == 2);
+  g_assert(strcmp (out, expected) == 0);
+  g_free(out);
+  out = g_convert(in_le, sizeof(in_le),"UTF-8", "UTF-16", &bytes_read, &bytes_written, &error);
+  g_assert_no_error(error);
+  g_assert(bytes_read == 4);
+  g_assert(bytes_written == 2);
+  g_assert(strcmp (out, expected) == 0);
+  g_free(out);
+}
+static void check_utf8_to_ucs4(const char *utf8, glong utf8_len, const gunichar *ucs4, glong ucs4_len, glong error_pos) {
+  gunichar *result, *result2, *result3;
+  glong items_read, items_read2;
+  glong items_written, items_written2;
+  GError *error, *error2, *error3;
+  gint i;
+  if (!error_pos) {
+      result = g_utf8_to_ucs4_fast (utf8, utf8_len, &items_written);
+      g_assert(items_written == ucs4_len);
+      g_assert(result);
+      for (i = 0; i <= items_written; i++)
+  	  g_assert(result[i] == ucs4[i]);
+      g_free (result);
+  }
+  error = NULL;
+  result = g_utf8_to_ucs4(utf8, utf8_len, &items_read, &items_written, &error);
+  if (utf8_len == strlen(utf8)) {
+      error2 = NULL;
+      result2 = g_utf8_to_ucs4(utf8, -1, &items_read2, &items_written2, &error2);
+      g_assert(error || items_read2 == items_read);
+      g_assert(error || items_written2 == items_written2);
+      g_assert(!!result == !!result2);
+      g_assert(!!error == !!error2);
+      if (result)
+          for (i = 0; i <= items_written; i++)
+              g_assert(result[i] == result2[i]);
+      g_free(result2);
+      if (error2)
+	  g_error_free(error2);
+  }
+  error3 = NULL;
+  result3 = g_utf8_to_ucs4 (utf8, utf8_len, NULL, NULL, &error3);
+  if (error3 && error3->code == G_CONVERT_ERROR_PARTIAL_INPUT) {
+      g_assert_no_error(error);
+      g_assert(items_read == error_pos);
+      g_assert(items_written == ucs4_len);
+      g_assert(result);
+      for (i = 0; i <= items_written; i++) g_assert(result[i] == ucs4[i]);
+  } else if (error_pos) {
+      g_assert(error != NULL);
+      g_assert(result == NULL);
+      g_assert(items_read == error_pos);
+      g_error_free(error);
+      g_assert(error3 != NULL);
+      g_assert(result3 == NULL);
+      g_error_free(error3);
+  } else {
+      g_assert_no_error(error);
+      g_assert(items_read == utf8_len);
+      g_assert(items_written == ucs4_len);
+      g_assert(result);
+      for (i = 0; i <= items_written; i++) g_assert(result[i] == ucs4[i]);
+      g_assert_no_error(error3);
+      g_assert(result3);
+      for (i = 0; i <= ucs4_len; i++) g_assert(result3[i] == ucs4[i]);
+  }
+  g_free(result);
+  g_free(result3);
+}
+static void check_ucs4_to_utf8(const gunichar *ucs4, glong ucs4_len, const char *utf8, glong utf8_len, glong error_pos) {
+  gchar *result, *result2, *result3;
+  glong items_read, items_read2;
+  glong items_written, items_written2;
+  GError *error, *error2, *error3;
+  error = NULL;
+  result = g_ucs4_to_utf8(ucs4, ucs4_len, &items_read, &items_written, &error);
+  if (ucs4[ucs4_len] == 0) {
+      error2 = NULL;
+      result2 = g_ucs4_to_utf8(ucs4, -1, &items_read2, &items_written2, &error2);
+      g_assert(error || items_read2 == items_read);
+      g_assert(error || items_written2 == items_written);
+      g_assert(!!result == !!result2);
+      g_assert(!!error == !!error2);
+      if (result) g_assert(strcmp(result, result2) == 0);
+      g_free(result2);
+      if (error2) g_error_free(error2);
+  }
+  error3 = NULL;
+  result3 = g_ucs4_to_utf8(ucs4, ucs4_len, NULL, NULL, &error3);
+  if (error_pos) {
+      g_assert(error != NULL);
+      g_assert(result == NULL);
+      g_assert(items_read == error_pos);
+      g_error_free(error);
+      g_assert(error3 != NULL);
+      g_assert(result3 == NULL);
+      g_error_free(error3);
+  } else {
+      g_assert_no_error(error);
+      g_assert(items_read == ucs4_len);
+      g_assert(items_written == utf8_len);
+      g_assert(result);
+      g_assert(strcmp (result, utf8) == 0);
+      g_assert_no_error(error3);
+      g_assert(result3);
+      g_assert(strcmp (result3, utf8) == 0);
+  }
+  g_free(result);
+  g_free(result3);
+}
+static void check_utf8_to_utf16(const char *utf8, glong utf8_len, const gunichar2 *utf16, glong utf16_len, glong error_pos) {
+  gunichar2 *result, *result2, *result3;
+  glong items_read, items_read2;
+  glong items_written, items_written2;
+  GError *error, *error2, *error3;
+  gint i;
+  error = NULL;
+  result = g_utf8_to_utf16(utf8, utf8_len, &items_read, &items_written, &error);
+  if (utf8_len == strlen(utf8)) {
+      error2 = NULL;
+      result2 = g_utf8_to_utf16(utf8, -1, &items_read2, &items_written2, &error2);
+      g_assert(error || items_read2 == items_read);
+      g_assert(error || items_written2 == items_written2);
+      g_assert(!!result == !!result2);
+      g_assert(!!error == !!error2);
+      if (result)
+          for (i = 0; i <= items_written; i++)
+              g_assert(result[i] == result2[i]);
+      g_free(result2);
+      if (error2) g_error_free(error2);
+  }
+  error3 = NULL;
+  result3 = g_utf8_to_utf16(utf8, utf8_len, NULL, NULL, &error3);
+  if (error3 && error3->code == G_CONVERT_ERROR_PARTIAL_INPUT) {
+      g_assert_no_error(error);
+      g_assert(items_read == error_pos);
+      g_assert(items_written == utf16_len);
+      g_assert(result);
+      for (i = 0; i <= items_written; i++) g_assert(result[i] == utf16[i]);
+  } else if (error_pos) {
+      g_assert(error != NULL);
+      g_assert(result == NULL);
+      g_assert(items_read == error_pos);
+      g_error_free(error);
+      g_assert(error3 != NULL);
+      g_assert(result3 == NULL);
+      g_error_free(error3);
+  } else {
+      g_assert_no_error(error);
+      g_assert(items_read == utf8_len);
+      g_assert(items_written == utf16_len);
+      g_assert(result);
+      for (i = 0; i <= items_written; i++) g_assert(result[i] == utf16[i]);
+      g_assert_no_error(error3);
+      g_assert(result3);
+      for (i = 0; i <= utf16_len; i++) g_assert(result3[i] == utf16[i]);
+  }
+  g_free(result);
+  g_free(result3);
+}
+static void check_utf16_to_utf8(const gunichar2 *utf16, glong utf16_len, const char *utf8, glong utf8_len, glong error_pos) {
+  gchar *result, *result2, *result3;
+  glong items_read, items_read2;
+  glong items_written, items_written2;
+  GError *error, *error2, *error3;
+  error = NULL;
+  result = g_utf16_to_utf8 (utf16, utf16_len, &items_read, &items_written, &error);
+  if (utf16[utf16_len] == 0) {
+      error2 = NULL;
+      result2 = g_utf16_to_utf8 (utf16, -1, &items_read2, &items_written2, &error2);
+      g_assert(error || items_read2 == items_read);
+      g_assert(error || items_written2 == items_written);
+      g_assert(!!result == !!result2);
+      g_assert(!!error == !!error2);
+      if (result) g_assert(strcmp (result, result2) == 0);
+      g_free(result2);
+      if (error2) g_error_free(error2);
+  }
+  error3 = NULL;
+  result3 = g_utf16_to_utf8(utf16, utf16_len, NULL, NULL, &error3);
+  if (error3 && error3->code == G_CONVERT_ERROR_PARTIAL_INPUT) {
+      g_assert_no_error(error);
+      g_assert(items_read == error_pos);
+      g_assert(items_read + 1 == utf16_len);
+      g_assert(items_written == utf8_len);
+      g_assert(result);
+      g_assert(strcmp (result, utf8) == 0);
+  } else if (error_pos) {
+      g_assert(error != NULL);
+      g_assert(result == NULL);
+      g_assert(items_read == error_pos);
+      g_error_free(error);
+      g_assert(error3 != NULL);
+      g_assert(result3 == NULL);
+      g_error_free(error3);
+  } else {
+      g_assert_no_error(error);
+      g_assert(items_read == utf16_len);
+      g_assert(items_written == utf8_len);
+      g_assert(result);
+      g_assert(strcmp(result, utf8) == 0);
+      g_assert_no_error(error3);
+      g_assert(result3);
+      g_assert(strcmp(result3, utf8) == 0);
+  }
+  g_free(result);
+  g_free(result3);
+}
+static void check_ucs4_to_utf16(const gunichar *ucs4, glong ucs4_len, const gunichar2 *utf16, glong utf16_len, glong error_pos) {
+  gunichar2 *result, *result2, *result3;
+  glong items_read, items_read2;
+  glong items_written, items_written2;
+  GError *error, *error2, *error3;
+  gint i;
+  error = NULL;
+  result = g_ucs4_to_utf16(ucs4, ucs4_len, &items_read, &items_written, &error);
+  if (ucs4[ucs4_len] == 0) {
+      error2 = NULL;
+      result2 = g_ucs4_to_utf16 (ucs4, -1, &items_read2, &items_written2, &error2);
+      g_assert(error || items_read2 == items_read);
+      g_assert(error || items_written2 == items_written);
+      g_assert(!!result == !!result2);
+      g_assert(!!error == !!error2);
+      if (result)
+          for (i = 0; i <= utf16_len; i++)
+              g_assert(result[i] == result2[i]);
+      g_free(result2);
+      if (error2) g_error_free(error2);
+  }
+  error3 = NULL;
+  result3 = g_ucs4_to_utf16(ucs4, -1, NULL, NULL, &error3);
+  if (error_pos) {
+      g_assert(error != NULL);
+      g_assert(result == NULL);
+      g_assert(items_read == error_pos);
+      g_error_free(error);
+      g_assert(error3 != NULL);
+      g_assert(result3 == NULL);
+      g_error_free(error3);
+  } else {
+      g_assert_no_error(error);
+      g_assert(items_read == ucs4_len);
+      g_assert(items_written == utf16_len);
+      g_assert(result);
+      for (i = 0; i <= utf16_len; i++) g_assert(result[i] == utf16[i]);
+      g_assert_no_error(error3);
+      g_assert(result3);
+      for (i = 0; i <= utf16_len; i++) g_assert(result3[i] == utf16[i]);
+  }
+  g_free(result);
+  g_free(result3);
+}
+static void check_utf16_to_ucs4(const gunichar2 *utf16, glong utf16_len, const gunichar *ucs4, glong ucs4_len, glong error_pos) {
+  gunichar *result, *result2, *result3;
+  glong items_read, items_read2;
+  glong items_written, items_written2;
+  GError *error, *error2, *error3;
+  gint i;
+  error = NULL;
+  result = g_utf16_to_ucs4 (utf16, utf16_len, &items_read, &items_written, &error);
+  if (utf16[utf16_len] == 0) {
+      error2 = NULL;
+      result2 = g_utf16_to_ucs4(utf16, -1, &items_read2, &items_written2, &error2);
+      g_assert(error || items_read2 == items_read);
+      g_assert(error || items_written2 == items_written2);
+      g_assert(!!result == !!result2);
+      g_assert(!!error == !!error2);
+      if (result)
+          for (i = 0; i <= items_written; i++)
+              g_assert (result[i] == result2[i]);
+      g_free(result2);
+      if (error2) g_error_free(error2);
+  }
+  error3 = NULL;
+  result3 = g_utf16_to_ucs4 (utf16, utf16_len, NULL, NULL, &error3);
+  if (error3 && error3->code == G_CONVERT_ERROR_PARTIAL_INPUT) {
+      g_assert_no_error(error);
+      g_assert(items_read == error_pos);
+      g_assert(items_read + 1 == utf16_len);
+      g_assert(items_written == ucs4_len);
+      g_assert(result);
+      for (i = 0; i <= items_written; i++) g_assert(result[i] == ucs4[i]);
+  } else if (error_pos) {
+      g_assert(error != NULL);
+      g_assert(result == NULL);
+      g_assert(items_read == error_pos);
+      g_error_free(error);
+      g_assert(error3 != NULL);
+      g_assert(result3 == NULL);
+      g_error_free(error3);
+  } else {
+      g_assert_no_error(error);
+      g_assert(items_read == utf16_len);
+      g_assert(items_written == ucs4_len);
+      g_assert(result);
+      for (i = 0; i <= ucs4_len; i++) g_assert(result[i] == ucs4[i]);
+      g_assert_no_error(error3);
+      g_assert(result3);
+      for (i = 0; i <= ucs4_len; i++) g_assert(result3[i] == ucs4[i]);
+  }
+  g_free(result);
+  g_free(result3);
+}
+static void test_unicode_conversions(void) {
+  char *utf8;
+  gunichar ucs4[100];
+  gunichar2 utf16[100];
+  utf8 = "abc";
+  ucs4[0] = 0x61; ucs4[1] = 0x62; ucs4[2] = 0x63; ucs4[3] = 0;
+  utf16[0] = 0x61; utf16[1] = 0x62; utf16[2] = 0x63; utf16[3] = 0;
+  check_utf8_to_ucs4 (utf8, 3, ucs4, 3, 0);
+  check_ucs4_to_utf8 (ucs4, 3, utf8, 3, 0);
+  check_utf8_to_utf16 (utf8, 3, utf16, 3, 0);
+  check_utf16_to_utf8 (utf16, 3, utf8, 3, 0);
+  check_ucs4_to_utf16 (ucs4, 3, utf16, 3, 0);
+  check_utf16_to_ucs4 (utf16, 3, ucs4, 3, 0);
+  utf8 = "\316\261\316\262\316\263";
+  ucs4[0] = 0x03b1; ucs4[1] = 0x03b2; ucs4[2] = 0x03b3; ucs4[3] = 0;
+  utf16[0] = 0x03b1; utf16[1] = 0x03b2; utf16[2] = 0x03b3; utf16[3] = 0;
+  check_utf8_to_ucs4 (utf8, 6, ucs4, 3, 0);
+  check_ucs4_to_utf8 (ucs4, 3, utf8, 6, 0);
+  check_utf8_to_utf16 (utf8, 6, utf16, 3, 0);
+  check_utf16_to_utf8 (utf16, 3, utf8, 6, 0);
+  check_ucs4_to_utf16 (ucs4, 3, utf16, 3, 0);
+  check_utf16_to_ucs4 (utf16, 3, ucs4, 3, 0);
+  utf8 = "abc\316";
+  ucs4[0] = 0x61; ucs4[1] = 0x62; ucs4[2] = 0x63; ucs4[3] = 0;
+  utf16[0] = 0x61; utf16[1] = 0x62; utf16[2] = 0x63; utf16[3] = 0;
+  check_utf8_to_ucs4 (utf8, 4, ucs4, 3, 3);
+  check_utf8_to_utf16 (utf8, 4, utf16, 3, 3);
+  utf8 = "abc\316\316";
+  ucs4[0] = 0; 
+  utf16[0] = 0;
+  check_utf8_to_ucs4 (utf8, 5, ucs4, 0, 3);
+  check_utf8_to_utf16 (utf8, 5, utf16, 0, 3);
+  utf8 = "ab";
+  ucs4[0] = 0x61; ucs4[1] = 0x62; ucs4[2] = 0;
+  utf16[0] = 0x61; utf16[1] = 0x62; utf16[2] = 0xd801; utf16[3] = 0;
+  check_utf16_to_utf8 (utf16, 3, utf8, 2, 2);
+  check_utf16_to_ucs4 (utf16, 3, ucs4, 2, 2);
+  utf8 = NULL;
+  ucs4[0] = 0;
+  utf16[0] = 0x61; utf16[1] = 0x62; utf16[2] = 0xdc01; utf16[3] = 0;
+  check_utf16_to_utf8 (utf16, 3, utf8, 0, 2);
+  check_utf16_to_ucs4 (utf16, 3, ucs4, 0, 2);
+  utf8 = NULL;
+  ucs4[0] = 0x61; ucs4[1] = 0x62; ucs4[2] = 0x80000000; ucs4[3] = 0;
+  utf16[0] = 0;
+  check_ucs4_to_utf8 (ucs4, 3, utf8, 0, 2);
+  check_ucs4_to_utf16 (ucs4, 3, utf16, 0, 2);
+}
+int main(int argc, char *argv[]) {
+  g_test_init(&argc, &argv, NULL);
+  g_test_add_func("/conversion/iconv-state", test_iconv_state);
+  g_test_add_func("/conversion/illegal-sequence", test_one_half);
+  g_test_add_func("/conversion/byte-order", test_byte_order);
+  g_test_add_func("/conversion/unicode", test_unicode_conversions);
+  return g_test_run();
+}

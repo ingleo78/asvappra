@@ -1,0 +1,145 @@
+#include <unistd.h>
+#include <string.h>
+#include "../gio.h"
+#include "gdbus-tests.h"
+
+static GMainLoop *loop = NULL;
+static void proxy_new_cb(GObject *source_object, GAsyncResult *res, gpointer user_data) {
+  GDBusProxy **ret = user_data;
+  GError *error;
+  error = NULL;
+  *ret = g_dbus_proxy_new_finish(res, &error);
+  g_assert_no_error(error);
+  g_assert(ret != NULL);
+  g_main_loop_quit(loop);
+}
+static void test_proxy_well_known_name(void) {
+  GDBusProxy *p;
+  GDBusProxy *p2;
+  GDBusProxy *ap;
+  GDBusProxy *ap2;
+  GDBusConnection *c;
+  GError *error;
+  gchar *name_owner;
+  gchar **property_names;
+  GVariant *variant;
+  GVariant *result;
+  session_bus_up();
+  usleep(500 * 1000);
+  error = NULL;
+  c = g_bus_get_sync(G_BUS_TYPE_SESSION, NULL, &error);
+  g_assert_no_error(error);
+  g_assert(c != NULL);
+  error = NULL;
+  p = g_dbus_proxy_new_sync(c, G_DBUS_PROXY_FLAGS_NONE, NULL, "com.example.TestService", "/com/example/TestObject", "com.example.Frob", NULL, &error);
+  g_assert_no_error(error);
+  g_assert_cmpstr(g_dbus_proxy_get_name_owner(p), ==, NULL);
+  g_assert(g_dbus_proxy_get_cached_property_names(p) == NULL);
+  g_dbus_proxy_new(c, G_DBUS_PROXY_FLAGS_NONE, NULL, "com.example.TestService", "/com/example/TestObject", "com.example.Frob", NULL, (GAsyncReadyCallback)proxy_new_cb,
+                   &ap);
+  g_main_loop_run(loop);
+  g_assert_cmpstr(g_dbus_proxy_get_name_owner(ap), ==, NULL);
+  g_assert(g_dbus_proxy_get_cached_property_names(ap) == NULL);
+  //g_assert(g_spawn_command_line_async(SRCDIR "/gdbus-testserver.py", NULL));
+  _g_assert_property_notify(p, "g-name-owner");
+  name_owner = g_dbus_proxy_get_name_owner(p);
+  property_names = g_dbus_proxy_get_cached_property_names(p);
+  g_assert(g_dbus_is_unique_name(name_owner));
+  g_assert(property_names != NULL && g_strv_length(property_names) > 0);
+  g_free(name_owner);
+  g_strfreev(property_names);
+  error = NULL;
+  p2 = g_dbus_proxy_new_sync(c, G_DBUS_PROXY_FLAGS_NONE, NULL, "com.example.TestService", "/com/example/TestObject", "com.example.Frob", NULL, &error);
+  g_assert_no_error(error);
+  name_owner = g_dbus_proxy_get_name_owner(p2);
+  property_names = g_dbus_proxy_get_cached_property_names(p2);
+  g_assert(g_dbus_is_unique_name(name_owner));
+  g_assert(property_names != NULL && g_strv_length(property_names) > 0);
+  g_free(name_owner);
+  g_strfreev(property_names);
+  g_dbus_proxy_new(c, G_DBUS_PROXY_FLAGS_NONE, NULL, "com.example.TestService", "/com/example/TestObject", "com.example.Frob", NULL, (GAsyncReadyCallback)proxy_new_cb,
+                   &ap2);
+  g_main_loop_run(loop);
+  name_owner = g_dbus_proxy_get_name_owner(ap2);
+  property_names = g_dbus_proxy_get_cached_property_names(ap2);
+  g_assert(g_dbus_is_unique_name(name_owner));
+  g_assert(property_names != NULL && g_strv_length (property_names) > 0);
+  g_free(name_owner);
+  g_strfreev(property_names);
+  variant = g_dbus_proxy_get_cached_property(p, "y");
+  g_assert(variant != NULL);
+  g_assert_cmpint(g_variant_get_byte(variant), ==, 1);
+  g_variant_unref(variant);
+  variant = g_dbus_proxy_get_cached_property(p2, "y");
+  g_assert(variant != NULL);
+  g_assert_cmpint(g_variant_get_byte(variant), ==, 1);
+  g_variant_unref(variant);
+  variant = g_dbus_proxy_get_cached_property(ap, "y");
+  g_assert(variant != NULL);
+  g_assert_cmpint(g_variant_get_byte (variant), ==, 1);
+  g_variant_unref(variant);
+  variant = g_dbus_proxy_get_cached_property(ap2, "y");
+  g_assert(variant != NULL);
+  g_assert_cmpint(g_variant_get_byte(variant), ==, 1);
+  g_variant_unref(variant);
+  result = g_dbus_proxy_call_sync(p, "FrobSetProperty", g_variant_new("(sv)", "y", g_variant_new_byte(42)), G_DBUS_CALL_FLAGS_NONE, -1, NULL, &error);
+  g_assert_no_error(error);
+  g_assert(result != NULL);
+  g_assert_cmpstr(g_variant_get_type_string(result), ==, "()");
+  g_variant_unref(result);
+  _g_assert_signal_received(p, "g-properties-changed");
+  variant = g_dbus_proxy_get_cached_property(p, "y");
+  g_assert(variant != NULL);
+  g_assert_cmpint(g_variant_get_byte(variant), ==, 42);
+  g_variant_unref(variant);
+  variant = g_dbus_proxy_get_cached_property(p2, "y");
+  g_assert(variant != NULL);
+  g_assert_cmpint(g_variant_get_byte(variant), ==, 42);
+  g_variant_unref(variant);
+  variant = g_dbus_proxy_get_cached_property(ap, "y");
+  g_assert(variant != NULL);
+  g_assert_cmpint(g_variant_get_byte(variant), ==, 42);
+  g_variant_unref(variant);
+  variant = g_dbus_proxy_get_cached_property(ap2, "y");
+  g_assert(variant != NULL);
+  g_assert_cmpint(g_variant_get_byte(variant), ==, 42);
+  g_variant_unref(variant);
+  result = g_dbus_proxy_call_sync(p, "Quit", NULL, G_DBUS_CALL_FLAGS_NONE, -1, NULL, &error);
+  g_assert_no_error(error);
+  g_assert(result != NULL);
+  g_assert_cmpstr(g_variant_get_type_string (result), ==, "()");
+  g_variant_unref(result);
+  _g_assert_property_notify(p, "g-name-owner");
+  g_assert_cmpstr(g_dbus_proxy_get_name_owner(p), ==, NULL);
+  g_assert(g_dbus_proxy_get_cached_property_names(p) == NULL);
+  g_assert(g_dbus_proxy_get_cached_property(p, "y") == NULL);
+  //g_assert(g_spawn_command_line_async(SRCDIR "/gdbus-testserver.py", NULL));
+  _g_assert_property_notify(p, "g-name-owner");
+  name_owner = g_dbus_proxy_get_name_owner(p);
+  property_names = g_dbus_proxy_get_cached_property_names(p);
+  g_assert(g_dbus_is_unique_name(name_owner));
+  g_assert(property_names != NULL && g_strv_length(property_names) > 0);
+  g_free(name_owner);
+  g_strfreev(property_names);
+  variant = g_dbus_proxy_get_cached_property(p, "y");
+  g_assert(variant != NULL);
+  g_assert_cmpint(g_variant_get_byte (variant), ==, 1);
+  g_variant_unref(variant);
+  g_object_unref(p2);
+  g_object_unref(p);
+  g_object_unref(ap2);
+  g_object_unref(ap);
+  g_object_unref(c);
+  session_bus_down();
+}
+int main(int argc, char *argv[]) {
+  gint ret;
+  g_type_init();
+  g_test_init(&argc, &argv, NULL);
+  loop = g_main_loop_new(NULL, FALSE);
+  g_unsetenv("DISPLAY");
+  g_setenv("DBUS_SESSION_BUS_ADDRESS", session_bus_get_temporary_address(), TRUE);
+  g_test_add_func("/gdbus/proxy-well-known-name", test_proxy_well_known_name);
+  ret = g_test_run();
+  return ret;
+}

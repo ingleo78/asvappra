@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+    <LinearLayout android:orientation="horizontal"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="#000">
+        <TextView android:layout_width="match_parent"
+            android:layout_height="34dp"
+            android:layout_weight="1"
+            android:text="Message Error"
+            android:textColor="#FFF"
+            android:textStyle="bold"
+            android:textSize="21dp"
+            android:gravity="center"/>
+        <ImageView android:id="@+id/CloseShowMessageError"
+            android:layout_width="match_parent"
+            android:layout_height="34dp"
+            android:layout_weight="7"
+            android:src="@drawable/close"
+            android:scaleType="fitXY"
+            android:paddingRight="4dp"/>
+    </LinearLayout>
+    <ScrollView android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+        <TextView android:id="@+id/Message"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="17dp"
+            android:textColor="#FFF"
+            android:textStyle="bold"
+            android:padding="4dp"/>
+    </ScrollView>
+</LinearLayout>
